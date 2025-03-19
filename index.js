@@ -23,6 +23,7 @@ async function run() {
         let issueTitle = core.getInput('issue_title');
         let failAction = core.getInput('fail_action');
         let allowIssueWriting = core.getInput('allow_issue_writing');
+        let artifactName = core.getInput('artifact_name');
         let createIssue = true;
 
         if (!(String(failAction).toLowerCase() === 'true' || String(failAction).toLowerCase() === 'false')) {
@@ -32,6 +33,12 @@ async function run() {
         if (String(allowIssueWriting).toLowerCase() === 'false') {
             createIssue = false;
         }
+
+        if (!artifactName) {
+            console.log('[WARNING]: \'artifact_name\' action input should not be empty. Setting it back to the default name.');
+            artifactName = 'zap_scan';
+        }
+
         console.log('starting the program');
         console.log('github run id :' + currentRunnerID);
 
@@ -40,9 +47,8 @@ async function run() {
             plugins = await common.helper.processLineByLine(`${workspace}/${rulesFileLocation}`);
         }
 
-        // Create the files so we can change the perms and allow the docker non root user to update them
-        await exec.exec(`touch ${jsonReportName} ${mdReportName} ${htmlReportName}`);
-        await exec.exec(`chmod a+w ${jsonReportName} ${mdReportName} ${htmlReportName}`);
+        // Allow writing files from the Docker container.
+        await exec.exec(`chmod a+w ${workspace}`);
 
         await exec.exec(`docker pull ${docker_name} -q`);
         let command = (`docker run -v ${workspace}:/zap/wrk/:rw --network="host" -e ZAP_AUTH_HEADER -e ZAP_AUTH_HEADER_VALUE -e ZAP_AUTH_HEADER_SITE ` +
@@ -68,7 +74,7 @@ async function run() {
                 console.log('Scanning process completed, starting to analyze the results!')
             }
         }
-        await common.main.processReport(token, workspace, plugins, currentRunnerID, issueTitle, repoName, createIssue);
+        await common.main.processReport(token, workspace, plugins, currentRunnerID, issueTitle, repoName, createIssue, artifactName);
     } catch (error) {
         core.setFailed(error.message);
     }
